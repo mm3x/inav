@@ -20,6 +20,9 @@
 #define TARGET_BOARD_IDENTIFIER "MF4S"
 #define USBD_PRODUCT_STRING  "Matek_F405SE"
 
+// *************** OLED (custom) ******************************
+#define UG2864_I2C_BUS		BUS_I2C2  // I2C2 is used instead of the default I2C1 due to its higher mechanical robustness
+
 // ******** Board LEDs  **********************
 #define LED0                    PA14  //Blue
 #define LED1                    PA13  //Green
@@ -42,12 +45,11 @@
 #define MPU6000_CS_PIN          PA4
 #define MPU6000_SPI_BUS         BUS_SPI1
 
-#define USE_EXTI
-#define GYRO_INT_EXTI            PC4
-#define USE_MPU_DATA_READY_SIGNAL
-
-// *************** OLED ******************************
-#define UG2864_I2C_BUS		BUS_I2C2  // I2C2 is used instead of the default I2C1 due to its higher mechanical robustness
+// ICM42688P
+#define USE_IMU_ICM42605
+#define IMU_ICM42605_ALIGN      CW0_DEG_FLIP
+#define ICM42605_CS_PIN         PA4
+#define ICM42605_SPI_BUS        BUS_SPI1
 
 // *************** I2C /Baro/Mag *********************
 #define USE_I2C
@@ -69,13 +71,7 @@
 
 #define USE_MAG
 #define MAG_I2C_BUS             BUS_I2C2
-#define USE_MAG_AK8963
-#define USE_MAG_AK8975
-#define USE_MAG_HMC5883
-#define USE_MAG_QMC5883
-#define USE_MAG_IST8310
-#define USE_MAG_MAG3110
-#define USE_MAG_LIS3MDL
+#define USE_MAG_ALL
 
 #define USE_RANGEFINDER
 #define USE_RANGEFINDER_US42
@@ -142,7 +138,11 @@
 #define SOFTSERIAL_1_TX_PIN      PA2
 #define SOFTSERIAL_1_RX_PIN      PA2
 
+#ifdef MATEKF405SE_PINIO
+#define SERIAL_PORT_COUNT       7
+#else
 #define SERIAL_PORT_COUNT       8
+#endif
 
 #define DEFAULT_RX_TYPE         RX_TYPE_SERIAL
 #define SERIALRX_PROVIDER       SERIALRX_SBUS
@@ -171,6 +171,7 @@
 #define USE_PINIO
 #define USE_PINIOBOX
 #define PINIO1_PIN                  PC6 // USER 1
+#define PINIO2_PIN                  PC7 // USER 2
 #endif
 
 // ***************  OTHERS *************************

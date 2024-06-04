@@ -33,8 +33,6 @@
 #include "fc/settings.h"
 #include "fc/runtime_config.h"
 
-#define SW_BLINK_CYCLE_MS 200 // 200ms on / 200ms off
-
 // XXX: This is the number of characters in a MAX7456 line.
 // Increment this number appropiately or enable support for
 // multiple iterations in displayWriteWithAttr() if bigger
@@ -66,7 +64,7 @@ static bool displayEmulateTextAttributes(displayPort_t *instance,
     // We only emulate blink for now, so there's no need to test
     // for it again.
     TEXT_ATTRIBUTES_REMOVE_BLINK(*attr);
-    if ((millis() / SW_BLINK_CYCLE_MS) % 2) {
+    if (getBlinkOnOff()) {
         memset(buf, ' ', length);
         buf[length] = '\0';
         // Tell the caller to use buf
@@ -179,7 +177,7 @@ int displayWriteChar(displayPort_t *instance, uint8_t x, uint8_t y, uint16_t c)
     }
 
 #ifdef USE_SIMULATOR
-	if (ARMING_FLAG(SIMULATOR_MODE)) {
+	if (ARMING_FLAG(SIMULATOR_MODE_HITL)) {
 		//some FCs do not power max7456 from USB power 
 		//driver can not read font metadata 
 		//chip assumed to not support second bank of font

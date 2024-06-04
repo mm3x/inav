@@ -146,6 +146,10 @@ static const failsafeProcedureLogic_t failsafeProcedureLogic[] = {
  */
 void failsafeReset(void)
 {
+    if (failsafeState.active) {  // can't reset if still active
+        return;
+    }
+
     failsafeState.rxDataFailurePeriod = PERIOD_RXDATA_FAILURE + failsafeConfig()->failsafe_delay * MILLIS_PER_TENTH_SECOND;
     failsafeState.rxDataRecoveryPeriod = PERIOD_RXDATA_RECOVERY + failsafeConfig()->failsafe_recovery_delay * MILLIS_PER_TENTH_SECOND;
     failsafeState.validRxDataReceivedAt = 0;
@@ -157,6 +161,7 @@ void failsafeReset(void)
     failsafeState.phase = FAILSAFE_IDLE;
     failsafeState.rxLinkState = FAILSAFE_RXLINK_DOWN;
     failsafeState.activeProcedure = failsafeConfig()->failsafe_procedure;
+    failsafeState.controlling = false;
 
     failsafeState.lastGoodRcCommand[ROLL] = 0;
     failsafeState.lastGoodRcCommand[PITCH] = 0;
@@ -211,14 +216,6 @@ bool failsafeRequiresAngleMode(void)
            failsafeProcedureLogic[failsafeState.activeProcedure].forceAngleMode;
 }
 
-bool failsafeRequiresMotorStop(void)
-{
-    return failsafeState.active &&
-           failsafeState.activeProcedure == FAILSAFE_PROCEDURE_AUTO_LANDING &&
-           posControl.flags.estAltStatus < EST_USABLE &&
-           currentBatteryProfile->failsafe_throttle < getThrottleIdleValue();
-}
-
 void failsafeStartMonitoring(void)
 {
     failsafeState.monitoring = true;
@@ -241,6 +238,10 @@ static void failsafeActivate(failsafePhase_e newPhase)
     failsafeState.phase = newPhase;
     ENABLE_FLIGHT_MODE(FAILSAFE_MODE);
     failsafeState.landingShouldBeFinishedAt = millis() + failsafeConfig()->failsafe_off_delay * MILLIS_PER_TENTH_SECOND;
+
+#ifdef USE_FW_AUTOLAND
+    posControl.fwLandState.landAborted = false;
+#endif
 
     failsafeState.events++;
 }
@@ -346,13 +347,16 @@ static failsafeProcedure_e failsafeChooseFailsafeProcedure(void)
         }
     }
 
+    // Inhibit Failsafe if emergency landing triggered manually
+    if (posControl.flags.manualEmergLandActive) {
+        return FAILSAFE_PROCEDURE_NONE;
+    }
+
     // Craft is closer than minimum failsafe procedure distance (if set to non-zero)
     // GPS must also be working, and home position set
-    if (failsafeConfig()->failsafe_min_distance > 0 &&
-            sensors(SENSOR_GPS) && STATE(GPS_FIX) && STATE(GPS_FIX_HOME)) {
-
+    if (failsafeConfig()->failsafe_min_distance > 0 && sensors(SENSOR_GPS) && STATE(GPS_FIX) && STATE(GPS_FIX_HOME)) {
         // get the distance to the original arming point
-        uint32_t distance = calculateDistanceToDestination(&original_rth_home);
+        uint32_t distance = calculateDistanceToDestination(&posControl.rthState.originalHomePosition);
         if (distance < failsafeConfig()->failsafe_min_distance) {
             // Use the alternate, minimum distance failsafe procedure instead
             return failsafeConfig()->failsafe_min_distance_procedure;
@@ -387,7 +391,7 @@ void failsafeUpdateState(void)
             case FAILSAFE_IDLE:
                 if (armed) {
                     // Track throttle command below minimum time
-                    if (THROTTLE_HIGH == calculateThrottleStatus(THROTTLE_STATUS_TYPE_RC)) {
+                    if (!throttleStickIsLow()) {
                         failsafeState.throttleLowPeriod = millis() + failsafeConfig()->failsafe_throttle_low_delay * MILLIS_PER_TENTH_SECOND;
                     }
                     if (!receivingRxDataAndNotFailsafeMode) {

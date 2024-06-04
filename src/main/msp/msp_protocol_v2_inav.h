@@ -31,6 +31,9 @@
 #define MSP2_INAV_OUTPUT_MAPPING                0x200A
 #define MSP2_INAV_MC_BRAKING                    0x200B
 #define MSP2_INAV_SET_MC_BRAKING                0x200C
+#define MSP2_INAV_OUTPUT_MAPPING_EXT            0x200D
+#define MSP2_INAV_TIMER_OUTPUT_MODE             0x200E
+#define MSP2_INAV_SET_TIMER_OUTPUT_MODE         0x200F
 
 #define MSP2_INAV_MIXER                         0x2010
 #define MSP2_INAV_SET_MIXER                     0x2011
@@ -85,3 +88,21 @@
 #define MSP2_INAV_LOGIC_CONDITIONS_SINGLE       0x203B
 
 #define MSP2_INAV_ESC_RPM                       0x2040
+
+#define MSP2_INAV_LED_STRIP_CONFIG_EX           0x2048
+#define MSP2_INAV_SET_LED_STRIP_CONFIG_EX       0x2049
+
+#define MSP2_INAV_FW_APPROACH                   0x204A
+#define MSP2_INAV_SET_FW_APPROACH               0x204B
+
+#define MSP2_INAV_RATE_DYNAMICS                 0x2060
+#define MSP2_INAV_SET_RATE_DYNAMICS             0x2061
+
+#define MSP2_INAV_EZ_TUNE                       0x2070
+#define MSP2_INAV_EZ_TUNE_SET                   0x2071
+
+#define MSP2_INAV_SELECT_MIXER_PROFILE          0x2080
+
+#define MSP2_INAV_CUSTOM_OSD_ELEMENTS           0x2100
+#define MSP2_INAV_SET_CUSTOM_OSD_ELEMENTS       0x2101
+

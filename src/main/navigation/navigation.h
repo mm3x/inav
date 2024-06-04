@@ -31,16 +31,17 @@
 
 #include "io/gps.h"
 
+
 /* GPS Home location data */
 extern gpsLocation_t        GPS_home;
 extern uint32_t             GPS_distanceToHome;        // distance to home point in meters
 extern int16_t              GPS_directionToHome;       // direction to home point in degrees
-extern fpVector3_t          original_rth_home;         // the original rth home - save it, since it could be replaced by safehome or HOME_RESET
 
 extern bool autoThrottleManuallyIncreased;
 
 /* Navigation system updates */
 void onNewGPSData(void);
+
 #if defined(USE_SAFE_HOME)
 
 #define MAX_SAFE_HOMES 8
@@ -59,14 +60,61 @@ typedef enum {
 
 PG_DECLARE_ARRAY(navSafeHome_t, MAX_SAFE_HOMES, safeHomeConfig);
 
-extern int8_t safehome_index;                    // -1 if no safehome, 0 to MAX_SAFEHOMES -1 otherwise
-extern uint32_t safehome_distance;               // distance to the nearest safehome
-extern bool safehome_applied;                    // whether the safehome has been applied to home.
-
 void resetSafeHomes(void);                       // remove all safehomes
 bool findNearestSafeHome(void);                  // Find nearest safehome
 
 #endif // defined(USE_SAFE_HOME)
+
+#ifdef USE_FW_AUTOLAND
+
+#ifndef MAX_SAFE_HOMES
+#define MAX_SAFE_HOMES 0
+#endif
+
+#define MAX_FW_LAND_APPOACH_SETTINGS (MAX_SAFE_HOMES + 9)
+
+typedef enum  {
+    FW_AUTOLAND_APPROACH_DIRECTION_LEFT,
+    FW_AUTOLAND_APPROACH_DIRECTION_RIGHT
+} fwAutolandApproachDirection_e;
+
+typedef enum {
+    FW_AUTOLAND_STATE_IDLE,
+    FW_AUTOLAND_STATE_LOITER,
+    FW_AUTOLAND_STATE_DOWNWIND,
+    FW_AUTOLAND_STATE_BASE_LEG,
+    FW_AUTOLAND_STATE_FINAL_APPROACH,
+    FW_AUTOLAND_STATE_GLIDE,
+    FW_AUTOLAND_STATE_FLARE
+} fwAutolandState_t;
+
+typedef struct {
+    int32_t approachAlt;
+    int32_t landAlt;
+    bool isSeaLevelRef;
+    fwAutolandApproachDirection_e approachDirection;
+    int16_t landApproachHeading1;
+    int16_t landApproachHeading2;
+} navFwAutolandApproach_t;
+
+PG_DECLARE_ARRAY(navFwAutolandApproach_t, MAX_FW_LAND_APPOACH_SETTINGS, fwAutolandApproachConfig);
+
+typedef struct navFwAutolandConfig_s
+{
+    uint32_t approachLength;
+    uint16_t finalApproachPitchToThrottleMod;
+    uint16_t glideAltitude;
+    uint16_t flareAltitude;
+    uint8_t flarePitch;
+    uint16_t maxTailwind;
+    int8_t glidePitch;
+} navFwAutolandConfig_t;
+
+PG_DECLARE(navFwAutolandConfig_t, navFwAutolandConfig);
+
+void resetFwAutolandApproach(int8_t idx);
+
+#endif
 
 #ifndef NAV_MAX_WAYPOINTS
 #define NAV_MAX_WAYPOINTS 15
@@ -175,6 +223,12 @@ typedef enum {
     WP_TURN_SMOOTHING_CUT,
 } wpFwTurnSmoothing_e;
 
+typedef enum {
+    MC_ALT_HOLD_STICK,
+    MC_ALT_HOLD_MID,
+    MC_ALT_HOLD_HOVER,
+} navMcAltHoldThrottle_e;
+
 typedef struct positionEstimationConfig_s {
     uint8_t automatic_mag_declination;
     uint8_t reset_altitude_type; // from nav_reset_type_e
@@ -203,7 +257,6 @@ typedef struct positionEstimationConfig_s {
     float w_xy_res_v;
 
     float w_acc_bias;   // Weight (cutoff frequency) for accelerometer bias estimation. 0 to disable.
-    float w_xyz_acc_p;
 
     float max_eph_epv;  // Max estimated position error acceptable for estimation (cm)
     float baro_epv;     // Baro position error
@@ -217,23 +270,24 @@ typedef struct navConfig_s {
 
     struct {
         struct {
-            uint8_t use_thr_mid_for_althold;    // Don't remember throttle when althold was initiated, assume that throttle is at Thr Mid = zero climb rate
-            uint8_t extra_arming_safety;        // from navExtraArmingSafety_e
-            uint8_t user_control_mode;          // NAV_GPS_ATTI or NAV_GPS_CRUISE
-            uint8_t rth_alt_control_mode;       // Controls the logic for choosing the RTH altitude
-            uint8_t rth_climb_first;            // Controls the logic for initial RTH climbout
-            uint8_t rth_climb_first_stage_mode;  // To determine how rth_climb_first_stage_altitude is used
-            uint8_t rth_tail_first;             // Return to home tail first
-            uint8_t disarm_on_landing;          //
-            uint8_t rth_allow_landing;          // Enable landing as last stage of RTH. Use constants in navRTHAllowLanding_e.
-            uint8_t rth_climb_ignore_emerg;     // Option to ignore GPS loss on initial climb stage of RTH
-            uint8_t rth_alt_control_override;   // Override RTH Altitude and Climb First settings using Pitch and Roll stick
-            uint8_t nav_overrides_motor_stop;   // Autonomous modes override motor_stop setting and user command to stop motor
-            uint8_t safehome_usage_mode;        // Controls when safehomes are used
-            uint8_t soaring_motor_stop;         // stop motor when Soaring mode enabled
-            uint8_t mission_planner_reset;      // Allow WP Mission Planner reset using mode toggle (resets WPs to 0)
-            uint8_t waypoint_mission_restart;   // Waypoint mission restart action
-            uint8_t rth_trackback_mode;         // Useage mode setting for RTH trackback
+            uint8_t extra_arming_safety;            // from navExtraArmingSafety_e
+            uint8_t user_control_mode;              // NAV_GPS_ATTI or NAV_GPS_CRUISE
+            uint8_t rth_alt_control_mode;           // Controls the logic for choosing the RTH altitude
+            uint8_t rth_climb_first;                // Controls the logic for initial RTH climbout
+            uint8_t rth_climb_first_stage_mode;     // To determine how rth_climb_first_stage_altitude is used
+            uint8_t rth_tail_first;                 // Return to home tail first
+            uint8_t disarm_on_landing;              //
+            uint8_t rth_allow_landing;              // Enable landing as last stage of RTH. Use constants in navRTHAllowLanding_e.
+            uint8_t rth_climb_ignore_emerg;         // Option to ignore GPS loss on initial climb stage of RTH
+            uint8_t rth_alt_control_override;       // Override RTH Altitude and Climb First settings using Pitch and Roll stick
+            uint8_t nav_overrides_motor_stop;       // Autonomous modes override motor_stop setting and user command to stop motor
+            uint8_t safehome_usage_mode;            // Controls when safehomes are used
+            uint8_t soaring_motor_stop;             // stop motor when Soaring mode enabled
+            uint8_t mission_planner_reset;          // Allow WP Mission Planner reset using mode toggle (resets WPs to 0)
+            uint8_t waypoint_mission_restart;       // Waypoint mission restart action
+            uint8_t rth_trackback_mode;             // Useage mode setting for RTH trackback
+            uint8_t rth_use_linear_descent;         // Use linear descent in the RTH head home leg
+            uint8_t landing_bump_detection;         // Allow landing detection based on G bump at touchdown
         } flags;
 
         uint8_t  pos_failure_timeout;               // Time to wait before switching to emergency landing (0 - disable)
@@ -244,6 +298,7 @@ typedef struct navConfig_s {
 #endif
         bool     waypoint_load_on_boot;             // load waypoints automatically during boot
         uint16_t auto_speed;                        // autonomous navigation speed cm/sec
+        uint8_t  min_ground_speed;                  // Minimum navigation ground speed [m/s]
         uint16_t max_auto_speed;                    // maximum allowed autonomous navigation speed cm/sec
         uint16_t max_auto_climb_rate;               // max vertical speed limitation cm/sec
         uint16_t max_manual_speed;                  // manual velocity control max horizontal speed
@@ -265,6 +320,9 @@ typedef struct navConfig_s {
         uint16_t waypoint_enforce_altitude;         // Forces waypoint altitude to be achieved
         uint8_t  land_detect_sensitivity;           // Sensitivity of landing detector
         uint16_t auto_disarm_delay;                 // safety time delay for landing detector
+        uint16_t rth_linear_descent_start_distance; // Distance from home to start the linear descent (0 = immediately)
+        uint8_t  cruise_yaw_rate;                   // Max yaw rate (dps) when CRUISE MODE is enabled
+        uint16_t rth_fs_landing_delay;              // Delay upon reaching home before starting landing if in FS (0 = immediate)
     } general;
 
     struct {
@@ -283,7 +341,8 @@ typedef struct navConfig_s {
 
         uint8_t posDecelerationTime;            // Brake time parameter
         uint8_t posResponseExpo;                // Position controller expo (taret vel expo for MC)
-        bool slowDownForTurning;             // Slow down during WP missions when changing heading on next waypoint
+        bool slowDownForTurning;                // Slow down during WP missions when changing heading on next waypoint
+        uint8_t althold_throttle_type;          // throttle zero datum type for alt hold
     } mc;
 
     struct {
@@ -291,11 +350,13 @@ typedef struct navConfig_s {
         uint8_t  max_climb_angle;            // Fixed wing max banking angle (deg)
         uint8_t  max_dive_angle;             // Fixed wing max banking angle (deg)
         uint16_t cruise_speed;               // Speed at cruise throttle (cm/s), used for time/distance left before RTH
-        uint8_t control_smoothness;          // The amount of smoothing to apply to controls for navigation
+        uint8_t  control_smoothness;         // The amount of smoothing to apply to controls for navigation
         uint16_t pitch_to_throttle_smooth;   // How smoothly the autopilot makes pitch to throttle correction inside a deadband defined by pitch_to_throttle_thresh.
         uint8_t  pitch_to_throttle_thresh;   // Threshold from average pitch where momentary pitch_to_throttle correction kicks in. [decidegrees]
+        uint16_t minThrottleDownPitchAngle;  // Automatic pitch down angle when throttle is at 0 in angle mode. Progressively applied between cruise throttle and zero throttle. [decidegrees]
         uint16_t loiter_radius;              // Loiter radius when executing PH on a fixed wing
-        int8_t land_dive_angle;
+        uint8_t  loiter_direction;           // Direction of loitering center point on right wing (clockwise - as before), or center point on left wing (counterclockwise)
+        int8_t   land_dive_angle;
         uint16_t launch_velocity_thresh;     // Velocity threshold for swing launch detection
         uint16_t launch_accel_thresh;        // Acceleration threshold for launch detection (cm/s/s)
         uint16_t launch_time_thresh;         // Time threshold for launch detection (ms)
@@ -309,7 +370,7 @@ typedef struct navConfig_s {
         uint8_t  launch_climb_angle;         // Target climb angle for launch (deg)
         uint8_t  launch_max_angle;           // Max tilt angle (pitch/roll combined) to consider launch successful. Set to 180 to disable completely [deg]
         bool     launch_manual_throttle;     // Allows launch with manual throttle control
-        uint8_t  launch_abort_deadband;      // roll/pitch stick movement deadband for launch abort
+        uint8_t  launch_land_abort_deadband;      // roll/pitch stick movement deadband for launch abort
         uint8_t  cruise_yaw_rate;            // Max yaw rate (dps) when CRUISE MODE is enabled
         bool     allow_manual_thr_increase;
         bool     useFwNavYawControl;
@@ -393,11 +454,12 @@ extern radar_pois_t radar_pois[RADAR_MAX_POIS];
 
 typedef struct {
     fpVector3_t pos;
-    int32_t     yaw;                // centidegrees
+    int32_t     heading;            // centidegrees
+    int32_t     bearing;            // centidegrees
     int32_t     nextTurnAngle;      // centidegrees
 } navWaypointPosition_t;
 
-typedef struct navDestinationPath_s {
+typedef struct navDestinationPath_s {   // NOT USED
     uint32_t distance; // meters * 100
     int32_t bearing; // deg * 100
 } navDestinationPath_t;
@@ -468,6 +530,7 @@ typedef struct {
     navSystemStatus_Error_e error;
     navSystemStatus_Flags_e flags;
     uint8_t                 activeWpNumber;
+    uint8_t                 activeWpIndex;
     navWaypointActions_e    activeWpAction;
 } navSystemStatus_t;
 
@@ -568,7 +631,7 @@ float geoCalculateMagDeclination(const gpsLocation_t * llh); // degrees units
 geoAltitudeConversionMode_e waypointMissionAltConvMode(geoAltitudeDatumFlag_e datumFlag);
 
 /* Distance/bearing calculation */
-bool navCalculatePathToDestination(navDestinationPath_t *result, const fpVector3_t * destinationPos);
+bool navCalculatePathToDestination(navDestinationPath_t *result, const fpVector3_t * destinationPos);   // NOT USED
 uint32_t distanceToFirstWP(void);
 
 /* Failsafe-forced RTH mode */
@@ -588,7 +651,7 @@ bool isFixedWingAutoThrottleManuallyIncreased(void);
 bool navigationIsFlyingAutonomousMode(void);
 bool navigationIsExecutingAnEmergencyLanding(void);
 bool navigationIsControllingAltitude(void);
-/* Returns true iff navConfig()->general.flags.rth_allow_landing is NAV_RTH_ALLOW_LANDING_ALWAYS
+/* Returns true if navConfig()->general.flags.rth_allow_landing is NAV_RTH_ALLOW_LANDING_ALWAYS
  * or if it's NAV_RTH_ALLOW_LANDING_FAILSAFE and failsafe mode is active.
  */
 bool navigationRTHAllowsLanding(void);
@@ -602,11 +665,14 @@ const char * fixedWingLaunchStateMessage(void);
 
 float calculateAverageSpeed(void);
 
-void updateLandingStatus(void);
+void updateLandingStatus(timeMs_t currentTimeMs);
+bool isProbablyStillFlying(void);
+void resetLandingDetectorActiveState(void);
 
 const navigationPIDControllers_t* getNavigationPIDControllers(void);
 
 int32_t navigationGetHeadingError(void);
+float navigationGetCrossTrackError(void);
 int32_t getCruiseHeadingAdjustment(void);
 bool isAdjustingPosition(void);
 bool isAdjustingHeading(void);
@@ -614,11 +680,21 @@ bool isAdjustingHeading(void);
 float getEstimatedAglPosition(void);
 bool isEstimatedAglTrusted(void);
 
+void checkManualEmergencyLandingControl(bool forcedActivation);
+float updateBaroAltitudeRate(float newBaroAltRate, bool updateValue);
+
+int8_t navCheckActiveAngleHoldAxis(void);
+uint8_t getActiveWpNumber(void);
+
 /* Returns the heading recorded when home position was acquired.
  * Note that the navigation system uses deg*100 as unit and angles
  * are in the [0, 360 * 100) interval.
  */
 int32_t navigationGetHomeHeading(void);
+
+#ifdef USE_FW_AUTOLAND
+bool canFwLandCanceld(void);
+#endif
 
 /* Compatibility data */
 extern navSystemStatus_t    NAV_Status;
@@ -628,6 +704,7 @@ extern int16_t navActualVelocity[3];
 extern int16_t navDesiredVelocity[3];
 extern int32_t navTargetPosition[3];
 extern int32_t navLatestActualPosition[3];
+extern uint16_t navDesiredHeading;
 extern int16_t navActualSurface;
 extern uint16_t navFlags;
 extern uint16_t navEPH;

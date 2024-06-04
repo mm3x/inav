@@ -357,7 +357,7 @@ bool compassIsCalibrationComplete(void)
 void compassUpdate(timeUs_t currentTimeUs)
 {
 #ifdef USE_SIMULATOR
-	if (ARMING_FLAG(SIMULATOR_MODE)) {
+	if (ARMING_FLAG(SIMULATOR_MODE_HITL)) {
 		magUpdatedAtLeastOnce = true;
 		return;
 	}
@@ -367,6 +367,9 @@ void compassUpdate(timeUs_t currentTimeUs)
     static int16_t magPrev[XYZ_AXIS_COUNT];
     static int magAxisDeviation[XYZ_AXIS_COUNT];
 
+#if defined(SITL_BUILD)
+    ENABLE_STATE(COMPASS_CALIBRATED);
+#else
     // Check magZero
     if (
         compassConfig()->magZero.raw[X] == 0 && compassConfig()->magZero.raw[Y] == 0 && compassConfig()->magZero.raw[Z] == 0 &&
@@ -377,6 +380,7 @@ void compassUpdate(timeUs_t currentTimeUs)
     else {
         ENABLE_STATE(COMPASS_CALIBRATED);
     }
+#endif
 
     if (!mag.dev.read(&mag.dev)) {
         mag.magADC[X] = 0;
@@ -468,7 +472,7 @@ void compassUpdate(timeUs_t currentTimeUs)
         fpVector3_t rotated;
 
         rotationMatrixRotateVector(&rotated, &v, &mag.dev.magAlign.externalRotation);
-
+        applyTailSitterAlignment(&rotated);
          mag.magADC[X] = rotated.x;
          mag.magADC[Y] = rotated.y;
          mag.magADC[Z] = rotated.z;
@@ -481,4 +485,5 @@ void compassUpdate(timeUs_t currentTimeUs)
 
     magUpdatedAtLeastOnce = true;
 }
+
 #endif
