@@ -208,6 +208,21 @@ static uint8_t ibusFrameStatus(rxRuntimeConfig_t *rxRuntimeConfig)
 static uint16_t ibusReadRawRC(const rxRuntimeConfig_t *rxRuntimeConfig, uint8_t chan)
 {
     UNUSED(rxRuntimeConfig);
+
+    // Wacky patch begins:
+    // Swap channels 1-4 (indexes 0-3) with channels 11-13,15 (indexes 10-12,14)
+
+    if (chan <= 2) { // 1-3 to 11-13
+        chan += 10;
+    } else if (chan == 3) { // 4 to 15
+        chan += 11;
+    } else if (chan >= 10 && chan <= 12) { // 11-13 to 1-3
+        chan -= 10;
+    } else if (chan == 14) { // 15 to 4
+        chan -= 11;
+    }
+    // Wacky patch ends
+
     return ibusChannelData[chan];
 }
 
